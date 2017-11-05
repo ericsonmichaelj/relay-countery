@@ -16,8 +16,8 @@ import {
   GraphQLNonNull,
   GraphQLObjectType,
   GraphQLSchema,
-  GraphQLString,
-} from 'graphql';
+  GraphQLString
+} from 'graphql'
 
 import {
   connectionArgs,
@@ -26,18 +26,19 @@ import {
   fromGlobalId,
   globalIdField,
   mutationWithClientMutationId,
-  nodeDefinitions,
-} from 'graphql-relay';
+  nodeDefinitions
+} from 'graphql-relay'
 
 import {
   // Import methods that your schema can use to interact with your database
   User,
-  Widget,
+  Count,
   getUser,
+  getCount,
   getViewer,
-  getWidget,
-  getWidgets,
-} from './database';
+  incrementCount,
+  decrementCount,
+} from './database'
 
 /**
  * We get the node interface and field from the Relay library.
@@ -45,48 +46,30 @@ import {
  * The first method defines the way we resolve an ID to its object.
  * The second defines the way we resolve an object to its GraphQL type.
  */
-var {nodeInterface, nodeField} = nodeDefinitions(
+const { nodeInterface, nodeField } = nodeDefinitions(
   (globalId) => {
-    var {type, id} = fromGlobalId(globalId);
+    const { type, id } = fromGlobalId(globalId)
     if (type === 'User') {
-      return getUser(id);
-    } else if (type === 'Widget') {
-      return getWidget(id);
+      return getUser(id)
+    } else if (type === 'Count') {
+      return getCount(id)
     } else {
-      return null;
+      return null
     }
   },
   (obj) => {
     if (obj instanceof User) {
-      return userType;
-    } else if (obj instanceof Widget)  {
-      return widgetType;
+      return userType
+    } else if (obj instanceof Count)  {
+      return countType
     } else {
-      return null;
+      return null
     }
   }
 );
 
-/**
- * Define your own types here
- */
 
-var userType = new GraphQLObjectType({
-  name: 'User',
-  description: 'A person who uses our app',
-  fields: () => ({
-    id: globalIdField('User'),
-    widgets: {
-      type: widgetConnection,
-      description: 'A person\'s collection of widgets',
-      args: connectionArgs,
-      resolve: (_, args) => connectionFromArray(getWidgets(), args),
-    },
-  }),
-  interfaces: [nodeInterface],
-});
-
-var widgetType = new GraphQLObjectType({
+const countType = new GraphQLObjectType({
   name: 'Widget',
   description: 'A shiny widget',
   fields: () => ({
@@ -94,50 +77,100 @@ var widgetType = new GraphQLObjectType({
     name: {
       type: GraphQLString,
       description: 'The name of the widget',
-    },
+    }
   }),
-  interfaces: [nodeInterface],
-});
+  interfaces: [nodeInterface]
+})
 
 /**
- * Define your own connection types here
+ * Define your own types here
  */
-var {connectionType: widgetConnection} =
-  connectionDefinitions({name: 'Widget', nodeType: widgetType});
+
+const userType = new GraphQLObjectType({
+  name: 'User',
+  description: 'A person who uses our app',
+  fields: () => ({
+    id: globalIdField('User'),
+    count: {
+      type: GraphQLInt,
+      description: 'The count',
+      resolve: (obj) => {
+        return getCount(obj.id)
+      }
+    }
+  })
+})
 
 /**
  * This is the type that will be the root of our query,
  * and the entry point into our schema.
  */
-var queryType = new GraphQLObjectType({
+const queryType = new GraphQLObjectType({
   name: 'Query',
   fields: () => ({
-    node: nodeField,
     // Add your own root fields here
-    viewer: {
+    node: nodeField,
+    counter: {
       type: userType,
-      resolve: () => getViewer(),
-    },
-  }),
-});
+      resolve: () => getViewer()
+    }
+  })
+})
+
+const IncrementCounterMutation = mutationWithClientMutationId({
+  name: 'IncrementCounter',
+  inputFields: {
+    id: { type: new GraphQLNonNull(GraphQLString) }
+  },
+  outputFields: {
+    counter: {
+      type: userType,
+      resolve: () => getViewer()
+    }
+  },
+  mutateAndGetPayload: ({ id }) => {
+    const userId = fromGlobalId(id).id
+    incrementCount(userId)
+    return {}
+  }
+})
+
+const DecrementCounterMutation = mutationWithClientMutationId({
+  name: 'DecrementCounter',
+  inputFields: {
+    id: { type: new GraphQLNonNull(GraphQLString) }
+  },
+  outputFields: {
+    counter: {
+      type: userType,
+      resolve: () => getViewer()
+    }
+  },
+  mutateAndGetPayload: ({ id }) => {
+    const userId = fromGlobalId(id).id
+    decrementCount(userId)
+    return {}
+  }
+})
 
 /**
  * This is the type that will be the root of our mutations,
  * and the entry point into performing writes in our schema.
  */
-var mutationType = new GraphQLObjectType({
+const mutationType = new GraphQLObjectType({
   name: 'Mutation',
   fields: () => ({
-    // Add your own mutations here
+    incrementCounter: IncrementCounterMutation,
+    decrementCounter: DecrementCounterMutation
   })
-});
+})
 
 /**
  * Finally, we construct our schema (whose starting query type is the query
  * type we defined above) and export it.
  */
-export var Schema = new GraphQLSchema({
+export const Schema = new GraphQLSchema({
   query: queryType,
   // Uncomment the following after adding some mutation fields:
-  // mutation: mutationType
-});
+  mutation: mutationType
+})

@@ -1,34 +1,56 @@
-import React from 'react';
-import Relay from 'react-relay';
+import React, { PropTypes } from 'react'
+import Relay from 'react-relay'
+import IncrementMutation from '../mutations/IncrementMutation'
+import DecrementMutation from '../mutations/DecrementMutation'
 
 class App extends React.Component {
+
+  static propTypes = {
+    relay:PropTypes.shape({
+      commitUpdate: PropTypes.func.isRequired
+    }),
+    counter: PropTypes.shape({
+      id: PropTypes.string,
+      count: PropTypes.int
+    })
+
+  }
+
+  _increment = () => {
+    this.props.relay.commitUpdate(
+      new IncrementMutation({
+        counter: this.props.counter
+      })
+    )
+  }
+  _decrement = () => {
+    this.props.relay.commitUpdate(
+      new DecrementMutation({
+        counter: this.props.counter
+      })
+    )
+  }
   render() {
     return (
       <div>
-        <h1>Widget list</h1>
-        <ul>
-          {this.props.viewer.widgets.edges.map(edge =>
-            <li key={edge.node.id}>{edge.node.name} (ID: {edge.node.id})</li>
-          )}
-        </ul>
+        {this.props.counter.count}
+        <button onClick={this._increment}> + </button>
+        <button onClick={this._decrement}> - </button>
       </div>
-    );
+
+    )
   }
 }
 
 export default Relay.createContainer(App, {
   fragments: {
-    viewer: () => Relay.QL`
+    counter: () => Relay.QL`
       fragment on User {
-        widgets(first: 10) {
-          edges {
-            node {
-              id,
-              name,
-            },
-          },
-        },
-      }
-    `,
-  },
-});
+        id,
+        count,
+        ${IncrementMutation.getFragment('counter')}
+        ${DecrementMutation.getFragment('counter')}
+    }
+    `
+  }
+})
